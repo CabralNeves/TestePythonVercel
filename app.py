@@ -41,6 +41,7 @@ def read_root() -> HTMLResponse:
 				<h1>🚀 Vercel + FastAPI</h1>
 				<p>Aplicação mínima em Python pronta para deploy na Vercel.</p>
 				<p>Tente a rota JSON: <a href="/api/hello/world"><code>/api/hello/world</code></a></p>
+				<p>Interface visual para imagens: <a href="/image"><code>/image</code></a></p>
 				<p>Ou rode localmente: <code>uvicorn app:app --reload --port 8000</code> e abra <a href="http://localhost:8000" target="_blank"><code>http://localhost:8000</code></a>.</p>
 				<div class="footer">v0.1.0</div>
 			</div>
@@ -169,7 +170,7 @@ async def process_image(file: UploadFile = File(...)) -> StreamingResponse:
 
 @app.get("/image", response_class=HTMLResponse)
 def image_ui() -> HTMLResponse:
-	# UI simples para upload e processamento de imagem, com preview e botão para baixar ZIP
+	# UI aprimorada para upload/processamento com drag-and-drop, progresso e preview
 	html = """
 	<!doctype html>
 	<html lang="pt-br">
@@ -178,24 +179,33 @@ def image_ui() -> HTMLResponse:
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Processamento de Imagem</title>
 		<style>
-			:root { --bg:#0b1020; --card:#12172b; --border:#1c2747; --text:#E6E8EC; --muted:#C6C9D3; --accent:#7bd2ff; }
-			html, body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+			:root { --bg:#0b1020; --card:#12172b; --border:#1c2747; --text:#E6E8EC; --muted:#C6C9D3; --accent:#7bd2ff; --accent-2:#9EE7FF; --danger:#ff6b6b; --ok:#8ce99a; }
+			html, body { margin:0; padding:0; background:radial-gradient(1200px 800px at 20% -10%, #13214a 0%, #0b1020 60%), var(--bg); color:var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
 			.container { max-width: 880px; margin: 0 auto; padding: 40px 20px; }
-			.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+			.card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.0)); border: 1px solid var(--border); border-radius: 14px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
 			h1 { margin: 0 0 12px; font-weight: 700; letter-spacing: .2px; }
 			p { margin: 0 0 16px; color: var(--muted); }
 			a { color: var(--accent); text-decoration: none; }
 			a:hover { text-decoration: underline; }
 			.row { display: grid; grid-template-columns: 1fr; gap: 16px; }
 			@media (min-width: 860px) { .row { grid-template-columns: 1fr 1fr; } }
-			.panel { background: rgba(255,255,255,0.02); border: 1px dashed var(--border); border-radius: 10px; padding: 16px; }
+			.panel { background: rgba(255,255,255,0.02); border: 1px dashed var(--border); border-radius: 12px; padding: 16px; }
 			.label { font-size: 14px; color: var(--muted); margin-bottom: 8px; display:block; }
-			.input { display:block; width:100%; padding: 10px 12px; border-radius: 10px; border:1px solid var(--border); background:#0b1020; color:var(--text); }
-			.btn { appearance: none; border: 1px solid var(--border); border-radius: 10px; background: #0f1630; color: var(--text); padding: 10px 14px; cursor: pointer; }
+			.input { display:none; }
+			.dropzone { border: 2px dashed var(--border); border-radius: 12px; padding: 18px; background: #0b1020; display:flex; align-items:center; gap:14px; cursor:pointer; transition: border-color .2s, background .2s; }
+			.dropzone:hover { border-color: var(--accent); background:#0d1430; }
+			.dropzone .icon { width: 32px; height: 32px; color: var(--accent-2); }
+			.help { font-size: 13px; color: var(--muted); }
+			.btn { appearance: none; border: 1px solid var(--border); border-radius: 10px; background: #0f1630; color: var(--text); padding: 10px 14px; cursor: pointer; transition: background .2s, transform .02s; }
 			.btn:hover { background: #101a3a; }
-			.preview { display:flex; align-items:center; justify-content:center; min-height: 260px; border-radius: 8px; overflow:hidden; background:#0b1020; border:1px solid var(--border); }
-			.preview img { max-width: 100%; max-height: 260px; object-fit: contain; display:block; }
-			.status { font-size: 14px; color: var(--muted); margin-top: 8px; min-height: 20px; }
+			.btn:active { transform: translateY(1px); }
+			.preview { display:flex; align-items:center; justify-content:center; min-height: 320px; border-radius: 10px; overflow:hidden; background:#0b1020; border:1px solid var(--border); }
+			.preview img { max-width: 100%; max-height: 320px; object-fit: contain; display:block; }
+			.fileinfo { margin-top: 10px; font-size: 13px; color: var(--muted); }
+			.progress { height: 10px; background: #0b1020; border:1px solid var(--border); border-radius: 999px; overflow:hidden; }
+			.progress > span { display:block; height:100%; width:0%; background: linear-gradient(90deg, #47b5ff, #7bd2ff); transition: width .15s ease-out; }
+			.status { font-size: 14px; color: var(--muted); margin-top: 8px; min-height: 22px; }
+			.badge { display:inline-block; padding: 2px 8px; border-radius: 999px; border:1px solid var(--border); background:#0f1630; color:#cfd8ff; font-size:12px; }
 			code { background:#0b1020; border:1px solid var(--border); border-radius:6px; padding:2px 6px; color:#9EE7FF; }
 		</style>
 	</head>
@@ -206,12 +216,24 @@ def image_ui() -> HTMLResponse:
 				<p>Envie uma imagem (JPEG/PNG/WEBP) para gerar miniatura, versão média, otimizada e metadados EXIF em um arquivo ZIP.</p>
 				<div class="row">
 					<div class="panel">
-						<label class="label" for="file">Selecionar arquivo</label>
+						<span class="label">Selecionar arquivo</span>
+						<div id="dropzone" class="dropzone" title="Clique para selecionar ou arraste sua imagem">
+							<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+								<path d="M12 16V4m0 0l-4 4m4-4l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+								<path d="M20 16v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+							</svg>
+							<div>
+								<div>Solte sua imagem aqui <span class="badge">JPEG/PNG/WEBP</span></div>
+								<div class="help">ou clique para procurar (até ~4.5MB)</div>
+							</div>
+						</div>
 						<input id="file" type="file" accept="image/jpeg,image/png,image/webp" class="input" />
-						<div style="margin-top: 12px; display:flex; gap:8px;">
+						<div style="margin-top: 12px; display:flex; gap:8px; align-items:center;">
 							<button id="btnProcess" class="btn">Processar</button>
 							<a id="downloadLink" class="btn" style="display:none;" download>Baixar ZIP</a>
 						</div>
+						<div style="margin-top:12px" class="progress"><span id="bar"></span></div>
+						<div class="fileinfo" id="fileinfo"></div>
 						<div class="status" id="status"></div>
 					</div>
 					<div class="panel">
@@ -224,20 +246,51 @@ def image_ui() -> HTMLResponse:
 		</div>
 		<script>
 			const input = document.getElementById('file');
+			const dropzone = document.getElementById('dropzone');
 			const btn = document.getElementById('btnProcess');
 			const statusEl = document.getElementById('status');
 			const link = document.getElementById('downloadLink');
 			const previewImg = document.getElementById('previewImg');
+			const bar = document.getElementById('bar');
+			const fileinfo = document.getElementById('fileinfo');
 
 			input.addEventListener('change', () => {
 				const f = input.files && input.files[0];
 				if (f) {
 					previewImg.src = URL.createObjectURL(f);
+					renderFileInfo(f);
 				} else {
 					previewImg.removeAttribute('src');
+					fileinfo.textContent = '';
 				}
 				link.style.display = 'none';
 				statusEl.textContent = '';
+				bar.style.width = '0%';
+			});
+
+			dropzone.addEventListener('click', () => input.click());
+			dropzone.addEventListener('dragover', (e) => {
+				e.preventDefault();
+				dropzone.style.borderColor = 'var(--accent)';
+			});
+			dropzone.addEventListener('dragleave', () => {
+				dropzone.style.borderColor = 'var(--border)';
+			});
+			dropzone.addEventListener('drop', (e) => {
+				e.preventDefault();
+				dropzone.style.borderColor = 'var(--border)';
+				if (!e.dataTransfer.files || !e.dataTransfer.files[0]) return;
+				const f = e.dataTransfer.files[0];
+				if (!/^image\\/(jpeg|png|webp)$/.test(f.type)) {
+					statusEl.textContent = 'Formato inválido. Envie JPEG, PNG ou WEBP.';
+					return;
+				}
+				input.files = e.dataTransfer.files;
+				previewImg.src = URL.createObjectURL(f);
+				renderFileInfo(f);
+				link.style.display = 'none';
+				statusEl.textContent = '';
+				bar.style.width = '0%';
 			});
 
 			btn.addEventListener('click', async () => {
@@ -248,28 +301,59 @@ def image_ui() -> HTMLResponse:
 				}
 				statusEl.textContent = 'Processando...';
 				link.style.display = 'none';
+				bar.style.width = '0%';
 
 				try {
 					const fd = new FormData();
 					fd.append('file', f, f.name);
-					const resp = await fetch('/api/image/process', {
-						method: 'POST',
-						body: fd
-					});
-					if (!resp.ok) {
-						const text = await resp.text();
-						throw new Error(text || 'Falha no processamento');
-					}
-					const blob = await resp.blob();
-					const url = URL.createObjectURL(blob);
-					link.href = url;
-					link.download = (f.name.split('.').slice(0, -1).join('.') || 'image') + '_processed.zip';
-					link.style.display = 'inline-block';
-					statusEl.textContent = 'Pronto! Clique em "Baixar ZIP".';
+
+					// Usamos XHR para acompanhar progresso
+					const xhr = new XMLHttpRequest();
+					xhr.open('POST', '/api/image/process');
+					xhr.responseType = 'blob';
+
+					xhr.upload.onprogress = (e) => {
+						if (!e.lengthComputable) return;
+						const pct = Math.min(100, Math.round((e.loaded / e.total) * 100));
+						bar.style.width = pct + '%';
+					};
+
+					xhr.onload = () => {
+						if (xhr.status >= 200 && xhr.status < 300) {
+							const blob = xhr.response;
+							const url = URL.createObjectURL(blob);
+							link.href = url;
+							link.download = (f.name.split('.').slice(0, -1).join('.') || 'image') + '_processed.zip';
+							link.style.display = 'inline-block';
+							statusEl.textContent = 'Pronto! Clique em "Baixar ZIP".';
+							bar.style.width = '100%';
+						} else {
+							const reader = new FileReader();
+							reader.onload = () => {
+								statusEl.textContent = 'Erro: ' + (reader.result || 'Falha no processamento');
+							};
+							reader.readAsText(xhr.response);
+						}
+					};
+
+					xhr.onerror = () => {
+						statusEl.textContent = 'Erro de rede durante o upload.';
+					};
+
+					xhr.send(fd);
 				} catch (e) {
 					statusEl.textContent = 'Erro: ' + (e?.message || 'Falha inesperada');
 				}
 			});
+
+			function renderFileInfo(f) {
+				const sizeKB = (f.size / 1024).toFixed(1);
+				const imgEl = new Image();
+				imgEl.onload = () => {
+					fileinfo.textContent = `${f.name} — ${imgEl.naturalWidth}x${imgEl.naturalHeight}px — ${sizeKB} KB — ${f.type}`;
+				};
+				imgEl.src = URL.createObjectURL(f);
+			}
 		</script>
 	</body>
 	</html>
