@@ -89,6 +89,7 @@ git push -u origin main
   - `medium_1024.webp` (ou png/jpeg): versão 1024px
   - `optimized.webp` (ou png/jpeg): versão otimizada mantendo dimensões originais
   - `metadata.json`: dimensões originais e EXIF extraído
+- `GET /image` — interface visual para selecionar a imagem, enviar para o backend e baixar o ZIP
 
 ### Exemplo de uso (cURL)
 

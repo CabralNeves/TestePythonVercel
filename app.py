@@ -167,3 +167,112 @@ async def process_image(file: UploadFile = File(...)) -> StreamingResponse:
 	}
 	return StreamingResponse(zip_buffer, media_type="application/zip", headers=headers)
 
+@app.get("/image", response_class=HTMLResponse)
+def image_ui() -> HTMLResponse:
+	# UI simples para upload e processamento de imagem, com preview e botão para baixar ZIP
+	html = """
+	<!doctype html>
+	<html lang="pt-br">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Processamento de Imagem</title>
+		<style>
+			:root { --bg:#0b1020; --card:#12172b; --border:#1c2747; --text:#E6E8EC; --muted:#C6C9D3; --accent:#7bd2ff; }
+			html, body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+			.container { max-width: 880px; margin: 0 auto; padding: 40px 20px; }
+			.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+			h1 { margin: 0 0 12px; font-weight: 700; letter-spacing: .2px; }
+			p { margin: 0 0 16px; color: var(--muted); }
+			a { color: var(--accent); text-decoration: none; }
+			a:hover { text-decoration: underline; }
+			.row { display: grid; grid-template-columns: 1fr; gap: 16px; }
+			@media (min-width: 860px) { .row { grid-template-columns: 1fr 1fr; } }
+			.panel { background: rgba(255,255,255,0.02); border: 1px dashed var(--border); border-radius: 10px; padding: 16px; }
+			.label { font-size: 14px; color: var(--muted); margin-bottom: 8px; display:block; }
+			.input { display:block; width:100%; padding: 10px 12px; border-radius: 10px; border:1px solid var(--border); background:#0b1020; color:var(--text); }
+			.btn { appearance: none; border: 1px solid var(--border); border-radius: 10px; background: #0f1630; color: var(--text); padding: 10px 14px; cursor: pointer; }
+			.btn:hover { background: #101a3a; }
+			.preview { display:flex; align-items:center; justify-content:center; min-height: 260px; border-radius: 8px; overflow:hidden; background:#0b1020; border:1px solid var(--border); }
+			.preview img { max-width: 100%; max-height: 260px; object-fit: contain; display:block; }
+			.status { font-size: 14px; color: var(--muted); margin-top: 8px; min-height: 20px; }
+			code { background:#0b1020; border:1px solid var(--border); border-radius:6px; padding:2px 6px; color:#9EE7FF; }
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="card">
+				<h1>🖼️ Processamento de Imagem</h1>
+				<p>Envie uma imagem (JPEG/PNG/WEBP) para gerar miniatura, versão média, otimizada e metadados EXIF em um arquivo ZIP.</p>
+				<div class="row">
+					<div class="panel">
+						<label class="label" for="file">Selecionar arquivo</label>
+						<input id="file" type="file" accept="image/jpeg,image/png,image/webp" class="input" />
+						<div style="margin-top: 12px; display:flex; gap:8px;">
+							<button id="btnProcess" class="btn">Processar</button>
+							<a id="downloadLink" class="btn" style="display:none;" download>Baixar ZIP</a>
+						</div>
+						<div class="status" id="status"></div>
+					</div>
+					<div class="panel">
+						<div class="label">Preview</div>
+						<div class="preview"><img id="previewImg" alt="Preview" /></div>
+					</div>
+				</div>
+				<p style="margin-top:16px">Endpoint usado: <code>POST /api/image/process</code></p>
+			</div>
+		</div>
+		<script>
+			const input = document.getElementById('file');
+			const btn = document.getElementById('btnProcess');
+			const statusEl = document.getElementById('status');
+			const link = document.getElementById('downloadLink');
+			const previewImg = document.getElementById('previewImg');
+
+			input.addEventListener('change', () => {
+				const f = input.files && input.files[0];
+				if (f) {
+					previewImg.src = URL.createObjectURL(f);
+				} else {
+					previewImg.removeAttribute('src');
+				}
+				link.style.display = 'none';
+				statusEl.textContent = '';
+			});
+
+			btn.addEventListener('click', async () => {
+				const f = input.files && input.files[0];
+				if (!f) {
+					statusEl.textContent = 'Selecione um arquivo primeiro.';
+					return;
+				}
+				statusEl.textContent = 'Processando...';
+				link.style.display = 'none';
+
+				try {
+					const fd = new FormData();
+					fd.append('file', f, f.name);
+					const resp = await fetch('/api/image/process', {
+						method: 'POST',
+						body: fd
+					});
+					if (!resp.ok) {
+						const text = await resp.text();
+						throw new Error(text || 'Falha no processamento');
+					}
+					const blob = await resp.blob();
+					const url = URL.createObjectURL(blob);
+					link.href = url;
+					link.download = (f.name.split('.').slice(0, -1).join('.') || 'image') + '_processed.zip';
+					link.style.display = 'inline-block';
+					statusEl.textContent = 'Pronto! Clique em "Baixar ZIP".';
+				} catch (e) {
+					statusEl.textContent = 'Erro: ' + (e?.message || 'Falha inesperada');
+				}
+			});
+		</script>
+	</body>
+	</html>
+	"""
+	return HTMLResponse(content=html)
+
