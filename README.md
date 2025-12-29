@@ -84,5 +84,21 @@ git push -u origin main
 
 - `GET /` — página HTML simples
 - `GET /api/hello/{name}` — retorna JSON com saudação
+- `POST /api/image/process` — upload de imagem (JPEG/PNG/WEBP) e retorno de ZIP com:
+  - `thumb_256.webp` (ou png/jpeg): miniatura 256px
+  - `medium_1024.webp` (ou png/jpeg): versão 1024px
+  - `optimized.webp` (ou png/jpeg): versão otimizada mantendo dimensões originais
+  - `metadata.json`: dimensões originais e EXIF extraído
+
+### Exemplo de uso (cURL)
+
+```bash
+curl -X POST http://localhost:8000/api/image/process \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@caminho/para/sua_imagem.jpg" \
+  --output processed.zip
+```
+
+Na Vercel, recomenda-se enviar arquivos até ~4.5MB por requisição (limite típico de Serverless Functions).
 
 
