@@ -3,4 +3,5 @@ uvicorn[standard]>=0.30,<1.0
 Pillow>=10.3,<11.0
 exifread>=3.0,<4.0
 python-multipart>=0.0.9,<0.1
+fpdf2>=2.7,<3.0
 

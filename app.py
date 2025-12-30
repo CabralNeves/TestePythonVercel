@@ -10,6 +10,9 @@ import json
 from PIL import Image, ImageOps
 import exifread
 
+from models.budget import BudgetRequest
+from services.budget_pdf import generate_budget_pdf
+
 app = FastAPI(title="Vercel Python App", version="0.1.0")
 
 
@@ -41,6 +44,7 @@ def read_root() -> HTMLResponse:
 				<h1>🚀 Vercel + FastAPI</h1>
 				<p>Aplicação mínima em Python pronta para deploy na Vercel.</p>
 				<p>Tente a rota JSON: <a href="/api/hello/world"><code>/api/hello/world</code></a></p>
+				<p>Interface de orçamento (PDF): <a href="/budget"><code>/budget</code></a></p>
 				<p>Interface visual para imagens: <a href="/image"><code>/image</code></a></p>
 				<p>Ou rode localmente: <code>uvicorn app:app --reload --port 8000</code> e abra <a href="http://localhost:8000" target="_blank"><code>http://localhost:8000</code></a>.</p>
 				<div class="footer">v0.1.0</div>
@@ -167,6 +171,15 @@ async def process_image(file: UploadFile = File(...)) -> StreamingResponse:
 		"Content-Disposition": f'attachment; filename="{filename_base}_processed.zip"'
 	}
 	return StreamingResponse(zip_buffer, media_type="application/zip", headers=headers)
+
+@app.post("/api/budget/pdf")
+async def budget_pdf(payload: BudgetRequest) -> StreamingResponse:
+	if not payload.items:
+		raise HTTPException(status_code=400, detail="Inclua pelo menos um item no orçamento.")
+
+	pdf_bytes = generate_budget_pdf(payload.model_dump())
+	headers = {"Content-Disposition": 'attachment; filename="orcamento.pdf"'}
+	return StreamingResponse(BytesIO(pdf_bytes), media_type="application/pdf", headers=headers)
 
 @app.get("/image", response_class=HTMLResponse)
 def image_ui() -> HTMLResponse:
@@ -354,6 +367,172 @@ def image_ui() -> HTMLResponse:
 				};
 				imgEl.src = URL.createObjectURL(f);
 			}
+		</script>
+	</body>
+	</html>
+	"""
+	return HTMLResponse(content=html)
+
+@app.get("/budget", response_class=HTMLResponse)
+def budget_ui() -> HTMLResponse:
+	# UI para entrada de itens e geração do PDF de orçamento
+	html = """
+	<!doctype html>
+	<html lang="pt-br">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Orçamento (PDF)</title>
+		<style>
+			:root { --bg:#0b1020; --card:#12172b; --border:#1c2747; --text:#E6E8EC; --muted:#C6C9D3; --accent:#7bd2ff; }
+			html, body { margin:0; padding:0; background:radial-gradient(1200px 800px at 20% -10%, #13214a 0%, #0b1020 60%), var(--bg); color:var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+			.container { max-width: 980px; margin: 0 auto; padding: 40px 20px; }
+			.card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.0)); border: 1px solid var(--border); border-radius: 14px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+			h1 { margin: 0 0 12px; font-weight: 700; letter-spacing: .2px; }
+			p { margin: 0 0 16px; color: var(--muted); }
+			.grid { display:grid; grid-template-columns: 1fr; gap:16px; }
+			@media (min-width: 880px) { .grid { grid-template-columns: 1fr 1fr; } }
+			.group { border: 1px dashed var(--border); border-radius: 12px; padding: 16px; }
+			.label { font-size: 13px; color: var(--muted); margin-bottom: 6px; display:block; }
+			.input, .select, .textarea { width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:#0b1020; color:var(--text); }
+			table { width: 100%; border-collapse: collapse; }
+			th, td { border-bottom:1px solid var(--border); padding:8px; text-align:left; }
+			tfoot td { border-top:1px solid var(--border); }
+			actions { display:flex; gap:8px; }
+			.btn { appearance:none; border:1px solid var(--border); border-radius:10px; background:#0f1630; color:var(--text); padding:10px 14px; cursor:pointer; }
+			.btn:hover { background:#101a3a; }
+			footer { display:flex; align-items:center; gap:10px; margin-top:12px; color:var(--muted); }
+			code { background:#0b1020; border:1px solid var(--border); border-radius:6px; padding:2px 6px; color:#9EE7FF; }
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="card">
+				<h1>🧾 Orçamento (PDF)</h1>
+				<p>Preencha os dados, inclua itens e gere um PDF de orçamento.</p>
+
+				<div class="grid">
+					<div class="group">
+						<div class="label">Empresa</div>
+						<input id="company_name" class="input" placeholder="Nome da empresa" />
+						<input id="company_email" class="input" placeholder="Email da empresa" style="margin-top:8px" />
+					</div>
+					<div class="group">
+						<div class="label">Cliente</div>
+						<input id="client_name" class="input" placeholder="Nome do cliente" />
+						<input id="client_email" class="input" placeholder="Email do cliente" style="margin-top:8px" />
+					</div>
+				</div>
+
+				<div class="group" style="margin-top:16px">
+					<div class="label">Itens</div>
+					<table id="itemsTable">
+						<thead>
+							<tr>
+								<th style="width:55%">Descrição</th>
+								<th style="width:15%">Qtd</th>
+								<th style="width:15%">Unitário</th>
+								<th style="width:15%">Ações</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+						<tfoot>
+							<tr>
+								<td colspan="4"><button id="addItem" class="btn">Adicionar item</button></td>
+							</tr>
+						</tfoot>
+					</table>
+				</div>
+
+				<div class="grid" style="margin-top:16px">
+					<div class="group">
+						<div class="label">Moeda e ajustes</div>
+						<select id="currency" class="select">
+							<option value="R$" selected>R$ (BRL)</option>
+							<option value="$">$ (USD)</option>
+							<option value="€">€ (EUR)</option>
+						</select>
+						<div style="display:flex; gap:8px; margin-top:8px">
+							<input id="discount_percent" class="input" type="number" placeholder="Desconto % (ex.: 5)" min="0" step="0.1" />
+							<input id="tax_percent" class="input" type="number" placeholder="Imposto % (ex.: 8)" min="0" step="0.1" />
+						</div>
+					</div>
+					<div class="group">
+						<div class="label">Observações</div>
+						<textarea id="notes" class="textarea" rows="5" placeholder="Termos, prazos e observações"></textarea>
+					</div>
+				</div>
+
+				<div style="margin-top:16px; display:flex; gap:8px">
+					<button id="btnGenerate" class="btn">Gerar PDF</button>
+					<a id="downloadPdf" class="btn" style="display:none;" download>Baixar PDF</a>
+				</div>
+				<footer>Endpoint: <code>POST /api/budget/pdf</code></footer>
+			</div>
+		</div>
+
+		<script>
+			const tbody = document.querySelector('#itemsTable tbody');
+			const addItemBtn = document.getElementById('addItem');
+			const btnGenerate = document.getElementById('btnGenerate');
+			const downloadPdf = document.getElementById('downloadPdf');
+
+			function addRow(desc='', qty=1, price=0) {
+				const tr = document.createElement('tr');
+				tr.innerHTML = \`
+					<td><input class="input" placeholder="Descrição" value="\${desc}"></td>
+					<td><input class="input" type="number" min="1" step="1" value="\${qty}"></td>
+					<td><input class="input" type="number" min="0" step="0.01" value="\${price}"></td>
+					<td><button class="btn btn-del">Remover</button></td>
+				\`;
+				tr.querySelector('.btn-del').addEventListener('click', () => tr.remove());
+				tbody.appendChild(tr);
+			}
+
+			addItemBtn.addEventListener('click', () => addRow());
+			// Linha inicial
+			addRow('Serviço', 1, 100);
+
+			btnGenerate.addEventListener('click', async () => {
+				const items = Array.from(tbody.querySelectorAll('tr')).map(tr => {
+					const [descEl, qtyEl, priceEl] = tr.querySelectorAll('input');
+					return {
+						description: descEl.value.trim(),
+						quantity: parseInt(qtyEl.value || '0'),
+						unit_price: parseFloat(priceEl.value || '0')
+					};
+				}).filter(it => it.description && it.quantity > 0);
+
+				if (!items.length) { alert('Adicione pelo menos um item.'); return; }
+
+				const payload = {
+					company_name: document.getElementById('company_name').value,
+					company_email: document.getElementById('company_email').value,
+					client_name: document.getElementById('client_name').value,
+					client_email: document.getElementById('client_email').value,
+					currency: document.getElementById('currency').value,
+					discount_percent: parseFloat(document.getElementById('discount_percent').value || '0'),
+					tax_percent: parseFloat(document.getElementById('tax_percent').value || '0'),
+					notes: document.getElementById('notes').value,
+					items
+				};
+
+				const resp = await fetch('/api/budget/pdf', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				});
+				if (!resp.ok) {
+					alert('Falha ao gerar PDF');
+					return;
+				}
+				const blob = await resp.blob();
+				const url = URL.createObjectURL(blob);
+				downloadPdf.href = url;
+				downloadPdf.download = 'orcamento.pdf';
+				downloadPdf.style.display = 'inline-block';
+				downloadPdf.click();
+			});
 		</script>
 	</body>
 	</html>
