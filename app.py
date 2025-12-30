@@ -438,7 +438,7 @@ def budget_ui() -> HTMLResponse:
 						<tbody></tbody>
 						<tfoot>
 							<tr>
-								<td colspan="4"><button id="addItem" class="btn">Adicionar item</button></td>
+								<td colspan="4"><button id="addItem" type="button" class="btn" onclick="addRow()">Adicionar item</button></td>
 							</tr>
 						</tfoot>
 					</table>
@@ -489,9 +489,11 @@ def budget_ui() -> HTMLResponse:
 				tbody.appendChild(tr);
 			}
 
-			addItemBtn.addEventListener('click', () => addRow());
-			// Linha inicial garantida
-			if (!tbody.querySelector('tr')) addRow('Serviço', 1, 100);
+			// Permitir uso via onclick no botão (fallback em ambientes que bloqueiem addEventListener cedo)
+			window.addRow = addRow;
+
+			// Linha inicial garantida (sempre adiciona uma)
+			addRow('Serviço', 1, 100);
 
 			btnGenerate.addEventListener('click', async () => {
 				const items = Array.from(tbody.querySelectorAll('tr')).map(tr => {
