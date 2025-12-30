@@ -490,16 +490,16 @@ def budget_ui() -> HTMLResponse:
 			}
 
 			addItemBtn.addEventListener('click', () => addRow());
-			// Linha inicial
-			addRow('Serviço', 1, 100);
+			// Linha inicial garantida
+			if (!tbody.querySelector('tr')) addRow('Serviço', 1, 100);
 
 			btnGenerate.addEventListener('click', async () => {
 				const items = Array.from(tbody.querySelectorAll('tr')).map(tr => {
 					const [descEl, qtyEl, priceEl] = tr.querySelectorAll('input');
 					return {
 						description: descEl.value.trim(),
-						quantity: parseInt(qtyEl.value || '0'),
-						unit_price: parseFloat(priceEl.value || '0')
+						quantity: parseInt((qtyEl.value || '0').replace(',', '.')),
+						unit_price: parseFloat((priceEl.value || '0').replace(',', '.'))
 					};
 				}).filter(it => it.description && it.quantity > 0);
 
@@ -511,8 +511,8 @@ def budget_ui() -> HTMLResponse:
 					client_name: document.getElementById('client_name').value,
 					client_email: document.getElementById('client_email').value,
 					currency: document.getElementById('currency').value,
-					discount_percent: parseFloat(document.getElementById('discount_percent').value || '0'),
-					tax_percent: parseFloat(document.getElementById('tax_percent').value || '0'),
+					discount_percent: parseFloat((document.getElementById('discount_percent').value || '0').replace(',', '.')),
+					tax_percent: parseFloat((document.getElementById('tax_percent').value || '0').replace(',', '.')),
 					notes: document.getElementById('notes').value,
 					items
 				};
@@ -523,7 +523,14 @@ def budget_ui() -> HTMLResponse:
 					body: JSON.stringify(payload)
 				});
 				if (!resp.ok) {
-					alert('Falha ao gerar PDF');
+					let msg = 'Falha ao gerar PDF';
+					try {
+						const data = await resp.json();
+						if (data && data.detail) msg += `: ${Array.isArray(data.detail) ? data.detail[0].msg || '' : data.detail}`;
+					} catch (_) {
+						try { msg += `: ${await resp.text()}`; } catch (__){}
+					}
+					alert(msg);
 					return;
 				}
 				const blob = await resp.blob();
